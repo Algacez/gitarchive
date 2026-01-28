@@ -47,17 +47,22 @@ def ensure_directory_exists(path):
 
 
 def parse_github_url(url):
-    """解析GitHub URL获取仓库信息"""
-    # 支持多种GitHub URL格式
+    """解析GitHub URL获取仓库信息（支持镜像地址）"""
+    # 支持多种URL格式，包括镜像地址
     patterns = [
-        r'https?://(?:www\.)?github\.com/([^/]+)/([^/]+?)(?:\.git)?/?',
-        r'git@github\.com:([^/]+)/([^/]+?)(?:\.git)?/?',
+        # HTTPS 格式（支持任何域名）
+        r'https?://[^/]+/([^/]+)/([^/]+?)(?:\.git)?/?',
+        # SSH 格式
+        r'git@[^/]+:([^/]+)/([^/]+?)(?:\.git)?/?',
     ]
 
     for pattern in patterns:
         match = re.match(pattern, url)
         if match:
             owner, repo = match.groups()
+            # 去除 .git 后缀
+            if repo.endswith('.git'):
+                repo = repo[:-4]
             return owner, repo
 
     return None, None
@@ -257,13 +262,19 @@ def repositories():
     target_path = os.path.join(BASE_DIR, str(year), month)
     repos = get_repositories_by_path(target_path)
 
-    # 获取所有可用的年月
+    # 获取所有可用的年月（只显示数字格式的年月目录）
     available_periods = []
     if os.path.exists(BASE_DIR):
         for year_dir in sorted(os.listdir(BASE_DIR), reverse=True):
+            # 只处理 4 位数字的年份目录
+            if not year_dir.isdigit() or len(year_dir) != 4:
+                continue
             year_path = os.path.join(BASE_DIR, year_dir)
             if os.path.isdir(year_path):
                 for month_dir in sorted(os.listdir(year_path), reverse=True):
+                    # 只处理 2 位数字的月份目录
+                    if not month_dir.isdigit() or len(month_dir) != 2:
+                        continue
                     month_path = os.path.join(year_path, month_dir)
                     if os.path.isdir(month_path):
                         available_periods.append({
