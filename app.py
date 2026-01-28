@@ -51,9 +51,9 @@ def parse_github_url(url):
     # 支持多种URL格式，包括镜像地址
     patterns = [
         # HTTPS 格式（支持任何域名）
-        r'https?://[^/]+/([^/]+)/([^/]+?)(?:\.git)?/?',
+        r'https?://[^/]+/([^/]+)/([^/]+)/?',
         # SSH 格式
-        r'git@[^/]+:([^/]+)/([^/]+?)(?:\.git)?/?',
+        r'git@[^/]+:([^/]+)/([^/]+)/?',
     ]
 
     for pattern in patterns:
