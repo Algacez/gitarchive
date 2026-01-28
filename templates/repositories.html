@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Archive - 仓库列表</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📦 仓库列表</h1>
+            <p class="subtitle">当前目录: {{ current_period }}</p>
+        </header>
+
+        <nav class="main-nav">
+            <a href="{{ url_for('index') }}">克隆仓库</a>
+            <a href="{{ url_for('repositories') }}" class="active">仓库列表</a>
+        </nav>
+
+        <main>
+            <!-- 时期选择器 -->
+            {% if available_periods %}
+            <div class="period-selector">
+                <label for="period-select">📅 选择月份：</label>
+                <select id="period-select" onchange="changePeriod()">
+                    {% for period in available_periods %}
+                        <option value="{{ period.year }}/{{ period.month }}"
+                                {% if period.year == current_year and period.month == current_month %}
+                                    selected
+                                {% endif %}>
+                            {{ period.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <!-- 仓库列表 -->
+            {% if repos %}
+            <div class="repo-list">
+                {% for repo in repos %}
+                <div class="repo-card">
+                    <div class="repo-header">
+                        <h3>{{ repo.name }}</h3>
+                        <span class="repo-date">📅 {{ repo.last_update }}</span>
+                    </div>
+                    <div class="repo-path">
+                        <code>{{ repo.path }}</code>
+                    </div>
+                    <div class="repo-actions">
+                        <button class="btn btn-sm btn-update" onclick="updateRepo('{{ repo.path }}')">
+                            <span>🔄 更新</span>
+                        </button>
+                        <button class="btn btn-sm btn-terminal" onclick="openTerminal('{{ repo.path }}')">
+                            <span>💻 终端</span>
+                        </button>
+                    </div>
+                    <div class="update-status" id="status-{{ repo.name }}"></div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>📭 该目录下暂无仓库</p>
+                <a href="{{ url_for('index') }}" class="btn btn-primary">去克隆第一个仓库</a>
+            </div>
+            {% endif %}
+        </main>
+
+        <footer>
+            <p>定时任务：每周日凌晨 2:00 自动更新所有仓库（间隔1分钟）</p>
+        </footer>
+    </div>
+
+    <script>
+        function changePeriod() {
+            const select = document.getElementById('period-select');
+            const [year, month] = select.value.split('/');
+            window.location.href = `{{ url_for('repositories') }}?year=${year}&month=${month}`;
+        }
+
+        async function updateRepo(path) {
+            const statusDiv = document.getElementById('status-' + path.split('/').pop());
+            statusDiv.innerHTML = '<span class="status-updating">⏳ 正在更新...</span>';
+
+            try {
+                const response = await fetch(`/update/${encodeURIComponent(path)}?mirror_prefix=bgithub.xyz`);
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = '<span class="status-success">✅ 更新成功</span>';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    statusDiv.innerHTML = `<span class="status-error">❌ 更新失败: ${result.error}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="status-error">❌ 网络错误</span>';
+            }
+        }
+
+        function openTerminal(path) {
+            // 打开终端到指定目录
+            const terminalCmd = `cd ${path}`;
+            alert(`请在终端中执行: ${terminalCmd}\n\n或使用: cd ${path}`);
+        }
+    </script>
+</body>
+</html>

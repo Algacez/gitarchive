@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Archive - 克隆仓库</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗂️ Git Archive</h1>
+            <p class="subtitle">GitHub 仓库管理系统</p>
+        </header>
+
+        <nav class="main-nav">
+            <a href="/" class="active">克隆仓库</a>
+            <a href="{{ url_for('repositories') }}">仓库列表</a>
+        </nav>
+
+        <main>
+            <div class="card clone-card">
+                <h2>📥 克隆新仓库</h2>
+                <form action="{{ url_for('clone') }}" method="POST" class="clone-form">
+                    <div class="form-group">
+                        <label for="url">GitHub 仓库地址</label>
+                        <input
+                            type="text"
+                            id="url"
+                            name="url"
+                            placeholder="https://github.com/username/repo"
+                            required
+                            autofocus
+                        >
+                        <small class="help-text">
+                            支持: https://github.com/user/repo 或 git@github.com:user/repo.git
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mirror_prefix">镜像地址前缀（可选）</label>
+                        <input
+                            type="text"
+                            id="mirror_prefix"
+                            name="mirror_prefix"
+                            value="{{ mirror_prefix }}"
+                            placeholder="bgithub.xyz"
+                        >
+                        <small class="help-text">
+                            留空则使用官方地址。例如：bgithub.xyz 会将 github.com 替换为 bgithub.xyz
+                        </small>
+                    </div>
+
+                    <div class="info-box">
+                        <strong>📁 保存位置：</strong>
+                        <code>/root/gitarchive/{{ now.year }}/{{ '%02d' % now.month }}/</code>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <span>开始克隆</span>
+                    </button>
+                </form>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash-message flash-{{ category }}">
+                                {% if category == 'success' %}✅{% else %}❌{% endif %}
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div class="stats-section" id="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-repos">-</div>
+                    <div class="stat-label">总仓库数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-size">-</div>
+                    <div class="stat-label">总大小 (MB)</div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>定时任务：每周日凌晨 2:00 自动更新所有仓库（间隔1分钟）</p>
+        </footer>
+    </div>
+
+    <script>
+        // 加载统计信息
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                document.getElementById('total-repos').textContent = data.total_repos;
+                document.getElementById('total-size').textContent = data.total_size_mb;
+            } catch (error) {
+                console.error('加载统计信息失败:', error);
+            }
+        }
+
+        // 页面加载时获取统计信息
+        loadStats();
+
+        // 自动隐藏flash消息
+        setTimeout(() => {
+            const flashMessages = document.querySelectorAll('.flash-message');
+            flashMessages.forEach(msg => {
+                msg.style.opacity = '0';
+                setTimeout(() => msg.remove(), 300);
+            });
+        }, 5000);
+    </script>
+</body>
+</html>
