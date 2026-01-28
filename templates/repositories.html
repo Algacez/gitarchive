@@ -40,10 +40,15 @@
             {% if repos %}
             <div class="repo-list">
                 {% for repo in repos %}
-                <div class="repo-card">
+                <div class="repo-card" data-repo-path="{{ repo.path }}">
                     <div class="repo-header">
                         <h3>{{ repo.name }}</h3>
                         <span class="repo-date">📅 {{ repo.last_update }}</span>
+                    </div>
+                    <div class="repo-url">
+                        <a href="{{ repo.url }}" target="_blank" rel="noopener noreferrer">
+                            🔗 {{ repo.url }}
+                        </a>
                     </div>
                     <div class="repo-path">
                         <code>{{ repo.path }}</code>

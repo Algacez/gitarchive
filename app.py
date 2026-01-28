@@ -130,10 +130,27 @@ def get_repositories_by_path(path):
                 repos.append({
                     "name": item,
                     "path": item_path,
-                    "last_update": get_last_commit_date(item_path)
+                    "last_update": get_last_commit_date(item_path),
+                    "url": get_repo_url(item_path)
                 })
 
     return sorted(repos, key=lambda x: x["name"])
+
+
+def get_repo_url(repo_path):
+    """获取仓库的远程 URL"""
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except:
+        pass
+    return "未知"
 
 
 def get_last_commit_date(repo_path):
@@ -296,6 +313,10 @@ def repositories():
 @app.route('/update/<path:repo_path>')
 def update_repo(repo_path):
     """更新单个仓库"""
+    # 如果路径不是绝对路径，添加开头的 /
+    if not os.path.isabs(repo_path):
+        repo_path = '/' + repo_path
+
     # 安全检查：确保路径在BASE_DIR下
     if not os.path.abspath(repo_path).startswith(BASE_DIR):
         return jsonify({"success": False, "error": "非法路径"})
