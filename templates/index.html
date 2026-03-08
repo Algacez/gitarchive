@@ -38,17 +38,33 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="mirror_prefix">镜像地址前缀（可选）</label>
+                        <label for="use_proxy">克隆网络</label>
+                        <select id="use_proxy" name="use_proxy">
+                            <option value="1" {% if proxy_settings.enabled %}selected{% endif %}>使用代理（默认）</option>
+                            <option value="0" {% if not proxy_settings.enabled %}selected{% endif %}>关闭代理（github.com）</option>
+                        </select>
+                        <small class="help-text">该设置会持久保存，下次打开仍使用当前选择。</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mirror_prefix">代理域名</label>
                         <input
                             type="text"
                             id="mirror_prefix"
                             name="mirror_prefix"
-                            value="{{ mirror_prefix }}"
+                            value="{{ proxy_settings.mirror_prefix }}"
                             placeholder="bgithub.xyz"
                         >
                         <small class="help-text">
-                            留空则使用官方地址。例如：bgithub.xyz 会将 github.com 替换为 bgithub.xyz
+                            默认是 bgithub.xyz，也可以改成你自己的代理域名（会持久保存）。
                         </small>
+                    </div>
+
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="weekly_update" checked>
+                            克隆后开启该仓库每周自动更新
+                        </label>
                     </div>
 
                     <div class="info-box">
@@ -88,7 +104,7 @@
         </main>
 
         <footer>
-            <p>定时任务：每周日凌晨 2:00 自动更新所有仓库（间隔1分钟）</p>
+            <p>定时任务：每周日凌晨 2:00 自动更新（仅更新已开启每周更新的仓库）</p>
         </footer>
     </div>
 
@@ -105,6 +121,15 @@
                 console.error('加载统计信息失败:', error);
             }
         }
+
+        function syncProxyInputState() {
+            const useProxy = document.getElementById('use_proxy').value === '1';
+            const mirrorInput = document.getElementById('mirror_prefix');
+            mirrorInput.disabled = !useProxy;
+        }
+
+        document.getElementById('use_proxy').addEventListener('change', syncProxyInputState);
+        syncProxyInputState();
 
         // 页面加载时获取统计信息
         loadStats();

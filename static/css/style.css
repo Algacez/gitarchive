@@ -198,6 +198,40 @@ header h1 {
     background: #3d444d;
 }
 
+.btn-download {
+    background: #6f42c1;
+    color: white;
+}
+
+.btn-download:hover {
+    background: #5a33a6;
+}
+
+.btn-delete {
+    background: var(--error-color);
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #c82333;
+}
+
+.checkbox-group {
+    margin-top: -5px;
+}
+
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: auto;
+}
+
 /* ===== Flash 消息 ===== */
 .flash-messages {
     max-width: 600px;
@@ -341,11 +375,50 @@ header h1 {
 .repo-actions {
     display: flex;
     gap: 10px;
+    flex-wrap: wrap;
+}
+
+.repo-options {
+    margin-bottom: 12px;
+}
+
+.download-link-row {
+    margin-top: 10px;
+}
+
+.download-link {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.download-link:hover {
+    text-decoration: underline;
+}
+
+.hidden {
+    display: none;
 }
 
 .update-status {
     margin-top: 10px;
     font-size: 14px;
+}
+
+.settings-card h2 {
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+
+.settings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 12px;
+    align-items: end;
+}
+
+.form-group-action {
+    margin-bottom: 20px;
 }
 
 .status-updating {
@@ -401,5 +474,13 @@ footer {
         flex-direction: column;
         align-items: flex-start;
         gap: 5px;
+    }
+
+    .settings-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group-action {
+        margin-bottom: 0;
     }
 }

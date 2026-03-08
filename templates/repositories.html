@@ -22,25 +22,52 @@
             <!-- 时期选择器 -->
             {% if available_periods %}
             <div class="period-selector">
-                <label for="period-select">📅 选择月份：</label>
-                <select id="period-select" onchange="changePeriod()">
-                    {% for period in available_periods %}
-                        <option value="{{ period.year }}/{{ period.month }}"
-                                {% if period.year == current_year and period.month == current_month %}
-                                    selected
-                                {% endif %}>
-                            {{ period.label }}
+                <label for="year-select">📅 选择年份：</label>
+                <select id="year-select" onchange="onYearChange()">
+                    {% for year in available_years %}
+                        <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>
+                            {{ year }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <label for="month-select">选择月份：</label>
+                <select id="month-select" onchange="changePeriod()">
+                    {% for month in months_by_year.get(current_year, []) %}
+                        <option value="{{ month }}" {% if month == current_month %}selected{% endif %}>
+                            {{ month }}
                         </option>
                     {% endfor %}
                 </select>
             </div>
             {% endif %}
 
+            <div class="card settings-card">
+                <h2>🌐 代理设置</h2>
+                <div class="settings-row">
+                    <div class="form-group">
+                        <label for="proxy-enabled">网络模式</label>
+                        <select id="proxy-enabled">
+                            <option value="1" {% if proxy_settings.enabled %}selected{% endif %}>使用代理</option>
+                            <option value="0" {% if not proxy_settings.enabled %}selected{% endif %}>关闭代理（github.com）</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="proxy-mirror">代理域名</label>
+                        <input id="proxy-mirror" type="text" value="{{ proxy_settings.mirror_prefix }}" placeholder="bgithub.xyz">
+                    </div>
+                    <div class="form-group form-group-action">
+                        <button class="btn btn-sm btn-update" type="button" onclick="saveProxySettings()">保存设置</button>
+                    </div>
+                </div>
+                <div class="update-status" id="proxy-status"></div>
+            </div>
+
             <!-- 仓库列表 -->
             {% if repos %}
             <div class="repo-list">
                 {% for repo in repos %}
-                <div class="repo-card" data-repo-path="{{ repo.path }}">
+                <div class="repo-card" id="repo-card-{{ loop.index0 }}" data-repo-path="{{ repo.path }}">
                     <div class="repo-header">
                         <h3>{{ repo.name }}</h3>
                         <span class="repo-date">📅 {{ repo.last_update }}</span>
@@ -53,15 +80,40 @@
                     <div class="repo-path">
                         <code>{{ repo.path }}</code>
                     </div>
+                    <div class="repo-options">
+                        <label class="checkbox-label">
+                            <input
+                                type="checkbox"
+                                {% if repo.weekly_update %}checked{% endif %}
+                                onchange='toggleWeeklyUpdate({{ repo.path|tojson }}, this, {{ loop.index0 }})'
+                            >
+                            开启每周自动更新
+                        </label>
+                    </div>
                     <div class="repo-actions">
-                        <button class="btn btn-sm btn-update" onclick="updateRepo('{{ repo.path }}')">
+                        <button class="btn btn-sm btn-update" onclick='updateRepo({{ repo.path|tojson }}, {{ loop.index0 }})'>
                             <span>🔄 更新</span>
                         </button>
-                        <button class="btn btn-sm btn-terminal" onclick="openTerminal('{{ repo.path }}')">
-                            <span>💻 终端</span>
+                        <button class="btn btn-sm btn-download" onclick='archiveRepo({{ repo.path|tojson }}, {{ loop.index0 }})'>
+                            <span>📦 打包下载</span>
+                        </button>
+                        <button class="btn btn-sm btn-delete" onclick='deleteRepo({{ repo.path|tojson }}, {{ loop.index0 }})'>
+                            <span>🗑️ 删除</span>
                         </button>
                     </div>
-                    <div class="update-status" id="status-{{ repo.name }}"></div>
+                    {% set archive_path = repo.path + '.zip' %}
+                    <div class="download-link-row">
+                        <a
+                            id="download-link-{{ loop.index0 }}"
+                            class="download-link {% if not repo.has_archive %}hidden{% endif %}"
+                            href="{% if repo.has_archive %}{{ url_for('download_archive', archive_path=archive_path.lstrip('/')) }}{% else %}#{% endif %}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            ⬇️ 下载 {{ repo.archive_name }}
+                        </a>
+                    </div>
+                    <div class="update-status" id="status-{{ loop.index0 }}"></div>
                 </div>
                 {% endfor %}
             </div>
@@ -74,23 +126,81 @@
         </main>
 
         <footer>
-            <p>定时任务：每周日凌晨 2:00 自动更新所有仓库（间隔1分钟）</p>
+            <p>定时任务：每周日凌晨 2:00 自动更新（仅更新已开启每周更新的仓库）</p>
         </footer>
     </div>
 
     <script>
+        const monthsByYear = {{ months_by_year|tojson }};
+
+        function onYearChange() {
+            const year = document.getElementById('year-select').value;
+            const monthSelect = document.getElementById('month-select');
+            const months = monthsByYear[year] || [];
+            monthSelect.innerHTML = '';
+
+            for (const month of months) {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = month;
+                monthSelect.appendChild(option);
+            }
+
+            changePeriod();
+        }
+
         function changePeriod() {
-            const select = document.getElementById('period-select');
-            const [year, month] = select.value.split('/');
+            const year = document.getElementById('year-select').value;
+            const month = document.getElementById('month-select').value;
             window.location.href = `{{ url_for('repositories') }}?year=${year}&month=${month}`;
         }
 
-        async function updateRepo(path) {
-            const statusDiv = document.getElementById('status-' + path.split('/').pop());
+        function getStatusDiv(statusId) {
+            return document.getElementById(`status-${statusId}`);
+        }
+
+        function syncProxyInputState() {
+            const enabled = document.getElementById('proxy-enabled').value === '1';
+            document.getElementById('proxy-mirror').disabled = !enabled;
+        }
+
+        async function saveProxySettings() {
+            const statusDiv = document.getElementById('proxy-status');
+            statusDiv.innerHTML = '<span class="status-updating">⏳ 正在保存代理设置...</span>';
+            const enabled = document.getElementById('proxy-enabled').value === '1';
+            const mirrorPrefix = document.getElementById('proxy-mirror').value.trim();
+
+            try {
+                const response = await fetch('/api/settings/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: enabled,
+                        mirror_prefix: mirrorPrefix
+                    })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = '<span class="status-success">✅ 已保存，后续克隆/更新将按该设置执行</span>';
+                } else {
+                    statusDiv.innerHTML = `<span class="status-error">❌ 保存失败: ${result.error || '未知错误'}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="status-error">❌ 网络错误</span>';
+            }
+        }
+
+        async function updateRepo(path, statusId) {
+            const statusDiv = getStatusDiv(statusId);
             statusDiv.innerHTML = '<span class="status-updating">⏳ 正在更新...</span>';
 
             try {
-                const response = await fetch(`/update/${encodeURIComponent(path)}?mirror_prefix=bgithub.xyz`);
+                const response = await fetch('/api/repository/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo_path: path })
+                });
                 const result = await response.json();
 
                 if (result.success) {
@@ -104,11 +214,91 @@
             }
         }
 
-        function openTerminal(path) {
-            // 打开终端到指定目录
-            const terminalCmd = `cd ${path}`;
-            alert(`请在终端中执行: ${terminalCmd}\n\n或使用: cd ${path}`);
+        async function toggleWeeklyUpdate(path, checkbox, statusId) {
+            const statusDiv = getStatusDiv(statusId);
+            const targetValue = checkbox.checked;
+            statusDiv.innerHTML = '<span class="status-updating">⏳ 正在保存每周更新设置...</span>';
+
+            try {
+                const response = await fetch('/api/repository/weekly-update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        repo_path: path,
+                        weekly_update: targetValue
+                    })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = `<span class="status-success">✅ 已${targetValue ? '开启' : '关闭'}每周更新</span>`;
+                } else {
+                    checkbox.checked = !targetValue;
+                    statusDiv.innerHTML = `<span class="status-error">❌ 保存失败: ${result.error || '未知错误'}</span>`;
+                }
+            } catch (error) {
+                checkbox.checked = !targetValue;
+                statusDiv.innerHTML = '<span class="status-error">❌ 网络错误</span>';
+            }
         }
+
+        async function archiveRepo(path, statusId) {
+            const statusDiv = getStatusDiv(statusId);
+            statusDiv.innerHTML = '<span class="status-updating">⏳ 正在打包仓库...</span>';
+
+            try {
+                const response = await fetch('/api/repository/archive', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo_path: path })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    const link = document.getElementById(`download-link-${statusId}`);
+                    link.href = result.download_url;
+                    link.classList.remove('hidden');
+                    link.textContent = `⬇️ 下载 ${result.archive_name}`;
+                    statusDiv.innerHTML = '<span class="status-success">✅ 打包完成，点击下方下载链接</span>';
+                } else {
+                    statusDiv.innerHTML = `<span class="status-error">❌ 打包失败: ${result.error || '未知错误'}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="status-error">❌ 网络错误</span>';
+            }
+        }
+
+        async function deleteRepo(path, statusId) {
+            if (!confirm('确认删除该仓库及其压缩包吗？此操作不可恢复。')) {
+                return;
+            }
+
+            const statusDiv = getStatusDiv(statusId);
+            statusDiv.innerHTML = '<span class="status-updating">⏳ 正在删除...</span>';
+
+            try {
+                const response = await fetch('/api/repository/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo_path: path })
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    const card = document.getElementById(`repo-card-${statusId}`);
+                    if (card) {
+                        card.remove();
+                    }
+                } else {
+                    statusDiv.innerHTML = `<span class="status-error">❌ 删除失败: ${result.error || '未知错误'}</span>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<span class="status-error">❌ 网络错误</span>';
+            }
+        }
+
+        document.getElementById('proxy-enabled').addEventListener('change', syncProxyInputState);
+        syncProxyInputState();
     </script>
 </body>
 </html>
