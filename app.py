@@ -365,6 +365,7 @@ def get_repositories_by_path(path, settings=None):
                 "name": item,
                 "path": item_path,
                 "last_update": get_last_commit_date(item_path),
+                "size": format_size(get_directory_size_bytes(item_path)),
                 "url": get_repo_url(item_path),
                 "weekly_update": get_repo_weekly_update(item_path, cfg),
                 "has_archive": os.path.exists(archive_path),
@@ -409,6 +410,28 @@ def get_last_commit_date(repo_path):
     except Exception:
         pass
     return "未知"
+
+
+def get_directory_size_bytes(path):
+    """计算目录大小（字节）"""
+    total = 0
+    for dirpath, _, filenames in os.walk(path):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            if os.path.exists(filepath):
+                total += os.path.getsize(filepath)
+    return total
+
+
+def format_size(size_bytes):
+    """将字节大小转换为可读文本"""
+    units = ["B", "KB", "MB", "GB", "TB"]
+    size = float(size_bytes)
+    unit_index = 0
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    return f"{size:.2f} {units[unit_index]}"
 
 
 def update_repository(repo_path, mirror_prefix=None):

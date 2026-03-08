@@ -42,27 +42,6 @@
             </div>
             {% endif %}
 
-            <div class="card settings-card">
-                <h2>🌐 代理设置</h2>
-                <div class="settings-row">
-                    <div class="form-group">
-                        <label for="proxy-enabled">网络模式</label>
-                        <select id="proxy-enabled">
-                            <option value="1" {% if proxy_settings.enabled %}selected{% endif %}>使用代理</option>
-                            <option value="0" {% if not proxy_settings.enabled %}selected{% endif %}>关闭代理（github.com）</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="proxy-mirror">代理域名</label>
-                        <input id="proxy-mirror" type="text" value="{{ proxy_settings.mirror_prefix }}" placeholder="bgithub.xyz">
-                    </div>
-                    <div class="form-group form-group-action">
-                        <button class="btn btn-sm btn-update" type="button" onclick="saveProxySettings()">保存设置</button>
-                    </div>
-                </div>
-                <div class="update-status" id="proxy-status"></div>
-            </div>
-
             <!-- 仓库列表 -->
             {% if repos %}
             <div class="repo-list">
@@ -70,7 +49,7 @@
                 <div class="repo-card" id="repo-card-{{ loop.index0 }}" data-repo-path="{{ repo.path }}">
                     <div class="repo-header">
                         <h3>{{ repo.name }}</h3>
-                        <span class="repo-date">📅 {{ repo.last_update }}</span>
+                        <span class="repo-date">📅 {{ repo.last_update }} | 💾 {{ repo.size }}</span>
                     </div>
                     <div class="repo-url">
                         <a href="{{ repo.url }}" target="_blank" rel="noopener noreferrer">
@@ -157,38 +136,6 @@
 
         function getStatusDiv(statusId) {
             return document.getElementById(`status-${statusId}`);
-        }
-
-        function syncProxyInputState() {
-            const enabled = document.getElementById('proxy-enabled').value === '1';
-            document.getElementById('proxy-mirror').disabled = !enabled;
-        }
-
-        async function saveProxySettings() {
-            const statusDiv = document.getElementById('proxy-status');
-            statusDiv.innerHTML = '<span class="status-updating">⏳ 正在保存代理设置...</span>';
-            const enabled = document.getElementById('proxy-enabled').value === '1';
-            const mirrorPrefix = document.getElementById('proxy-mirror').value.trim();
-
-            try {
-                const response = await fetch('/api/settings/proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        enabled: enabled,
-                        mirror_prefix: mirrorPrefix
-                    })
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    statusDiv.innerHTML = '<span class="status-success">✅ 已保存，后续克隆/更新将按该设置执行</span>';
-                } else {
-                    statusDiv.innerHTML = `<span class="status-error">❌ 保存失败: ${result.error || '未知错误'}</span>`;
-                }
-            } catch (error) {
-                statusDiv.innerHTML = '<span class="status-error">❌ 网络错误</span>';
-            }
         }
 
         async function updateRepo(path, statusId) {
@@ -297,8 +244,6 @@
             }
         }
 
-        document.getElementById('proxy-enabled').addEventListener('change', syncProxyInputState);
-        syncProxyInputState();
     </script>
 </body>
 </html>
