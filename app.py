@@ -295,7 +295,7 @@ def apply_mirror(url, mirror_prefix=None):
     return rewrite_git_host(url, target_host)
 
 
-def clone_repository(url, mirror_prefix=None):
+def clone_repository(url, mirror_prefix=None, shallow_clone=False, depth=1):
     """克隆仓库到指定目录"""
     owner, repo = parse_github_url(url)
     if not owner or not repo:
@@ -309,11 +309,22 @@ def clone_repository(url, mirror_prefix=None):
         return {"success": False, "error": f"仓库 {repo} 已存在"}
 
     clone_url = apply_mirror(url, mirror_prefix)
+    clone_cmd = ["git", "clone"]
+    if shallow_clone:
+        clone_cmd.extend(
+            [
+                "--depth",
+                str(depth),
+                "--recurse-submodules",
+                "--shallow-submodules",
+            ]
+        )
+    clone_cmd.extend([clone_url, repo_path])
 
     try:
-        logger.info(f"开始克隆: {clone_url}")
+        logger.info(f"开始克隆: {' '.join(clone_cmd)}")
         result = subprocess.run(
-            ["git", "clone", clone_url, repo_path],
+            clone_cmd,
             capture_output=True,
             text=True,
             timeout=300,
@@ -517,21 +528,34 @@ def clone():
     use_proxy = request.form.get("use_proxy", "1") == "1"
     mirror_prefix = request.form.get("mirror_prefix", DEFAULT_PROXY_PREFIX).strip() or DEFAULT_PROXY_PREFIX
     weekly_update = request.form.get("weekly_update", "on") == "on"
+    shallow_clone = request.form.get("shallow_clone", "off") == "on"
+    depth_raw = request.form.get("clone_depth", "1").strip()
 
     if not url:
         flash("请输入仓库地址", "error")
         return redirect(url_for("index"))
 
+    depth = 1
+    if shallow_clone:
+        try:
+            depth = int(depth_raw)
+            if depth < 1:
+                raise ValueError
+        except ValueError:
+            flash("浅克隆 depth 必须是大于等于 1 的整数", "error")
+            return redirect(url_for("index"))
+
     # 持久化代理设置
     save_proxy_settings(use_proxy, mirror_prefix)
     effective_mirror = mirror_prefix if use_proxy else DEFAULT_MIRROR
 
-    result = clone_repository(url, effective_mirror)
+    result = clone_repository(url, effective_mirror, shallow_clone=shallow_clone, depth=depth)
 
     if result["success"]:
         set_repo_weekly_update(result["path"], weekly_update)
         weekly_text = "已开启" if weekly_update else "已关闭"
-        flash(f'成功克隆仓库: {result["repo"]}（每周更新{weekly_text}）', "success")
+        clone_text = f"浅克隆 depth={depth}" if shallow_clone else "完整克隆"
+        flash(f'成功克隆仓库: {result["repo"]}（{clone_text}，每周更新{weekly_text}）', "success")
     else:
         flash(f'克隆失败: {result["error"]}', "error")
 

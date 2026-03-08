@@ -67,6 +67,28 @@
                         </label>
                     </div>
 
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="shallow_clone" name="shallow_clone">
+                            使用浅克隆（包含子模块浅克隆）
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="clone_depth">浅克隆 depth</label>
+                        <input
+                            type="number"
+                            id="clone_depth"
+                            name="clone_depth"
+                            value="1"
+                            min="1"
+                            step="1"
+                        >
+                        <small class="help-text">
+                            开启浅克隆时等价于：git clone --depth N --recurse-submodules --shallow-submodules
+                        </small>
+                    </div>
+
                     <div class="info-box">
                         <strong>📁 保存位置：</strong>
                         <code>/root/gitarchive/{{ now.year }}/{{ '%02d' % now.month }}/</code>
@@ -128,8 +150,16 @@
             mirrorInput.disabled = !useProxy;
         }
 
+        function syncShallowDepthState() {
+            const shallowEnabled = document.getElementById('shallow_clone').checked;
+            const depthInput = document.getElementById('clone_depth');
+            depthInput.disabled = !shallowEnabled;
+        }
+
         document.getElementById('use_proxy').addEventListener('change', syncProxyInputState);
+        document.getElementById('shallow_clone').addEventListener('change', syncShallowDepthState);
         syncProxyInputState();
+        syncShallowDepthState();
 
         // 页面加载时获取统计信息
         loadStats();
