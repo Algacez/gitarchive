@@ -56,6 +56,23 @@ def get_default_settings():
     }
 
 
+def as_bool(value, default=True):
+    """兼容字符串/数字的布尔解析"""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
 def load_settings():
     """加载配置文件"""
     ensure_directory_exists(BASE_DIR)
@@ -71,13 +88,35 @@ def load_settings():
         logger.error(f"读取配置失败: {e}")
         return default_settings
 
-    proxy = data.get("proxy", {})
-    mirror_prefix = str(proxy.get("mirror_prefix", DEFAULT_PROXY_PREFIX)).strip() or DEFAULT_PROXY_PREFIX
-    enabled = bool(proxy.get("enabled", True))
+    # 新版结构: {"proxy": {"enabled": bool, "mirror_prefix": str}, "repo_settings": {...}}
+    # 兼容旧版结构: {"mirror_prefix": "...", "proxy_enabled": "...", "weekly_update": {...}}
+    proxy = data.get("proxy", {}) if isinstance(data.get("proxy"), dict) else {}
+    legacy_mirror = data.get("mirror_prefix")
+    legacy_enabled = data.get("proxy_enabled", data.get("use_proxy"))
 
-    repo_settings = data.get("repo_settings", {})
-    if not isinstance(repo_settings, dict):
-        repo_settings = {}
+    mirror_prefix = str(
+        proxy.get("mirror_prefix", legacy_mirror if legacy_mirror is not None else DEFAULT_PROXY_PREFIX)
+    ).strip() or DEFAULT_PROXY_PREFIX
+    enabled = as_bool(proxy.get("enabled", legacy_enabled), default=True)
+
+    repo_settings_raw = data.get("repo_settings")
+    repo_settings = {}
+    if isinstance(repo_settings_raw, dict):
+        # 兼容 repo_settings 的两种格式:
+        # 1) {"/path/repo": {"weekly_update": true}}
+        # 2) {"/path/repo": true}
+        for repo_path, repo_cfg in repo_settings_raw.items():
+            if isinstance(repo_cfg, dict):
+                weekly_update = as_bool(repo_cfg.get("weekly_update"), default=True)
+            else:
+                weekly_update = as_bool(repo_cfg, default=True)
+            repo_settings[str(repo_path)] = {"weekly_update": weekly_update}
+    else:
+        # 兼容旧版 weekly_update: {"/path/repo": true/false}
+        legacy_weekly = data.get("weekly_update", {})
+        if isinstance(legacy_weekly, dict):
+            for repo_path, weekly_value in legacy_weekly.items():
+                repo_settings[str(repo_path)] = {"weekly_update": as_bool(weekly_value, default=True)}
 
     return {
         "proxy": {
@@ -326,7 +365,7 @@ def get_repositories_by_path(path, settings=None):
 
 
 def get_repo_url(repo_path):
-    """获取仓库的远程 URL"""
+    """获取仓库展示 URL（统一显示 github.com）"""
     try:
         result = subprocess.run(
             ["git", "-C", repo_path, "remote", "get-url", "origin"],
@@ -335,7 +374,11 @@ def get_repo_url(repo_path):
             timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
+            origin_url = result.stdout.strip()
+            owner, repo = parse_github_url(origin_url)
+            if owner and repo:
+                return f"https://{DEFAULT_MIRROR}/{owner}/{repo}"
+            return origin_url
     except Exception:
         pass
     return "未知"
